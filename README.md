@@ -1,1 +1,1 @@
-# States machine
+# States Manager
