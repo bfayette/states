@@ -1,6 +1,6 @@
 # States Manager
 
-A Java state machine library for managing complex approval workflows and state transitions.
+A Java state machine library for managing complex **multi-step approval workflows** and state transitions.
 
 ## Overview
 
@@ -14,10 +14,15 @@ A Java state machine library for managing complex approval workflows and state t
 ## Features
 
 - **State Machine Core**: Generic state machine implementation with transition tracking
-- **Approval Workflow**: Built-in support for multi-step approval processes (analyst → manager → approver)
-- **Conditional Transitions**: Validate transitions based on custom conditions
-- **Event Tracking**: Track all state transitions with event history
-- **Serializable**: State machine state can be serialized for persistence
+- **Multi-Step Approval Workflow**: Native support for sequential approval processes with multiple stakeholders
+  - Analyst → Manager → Approver flow (3+ step approvals)
+  - Rework cycles: REJECTED → IN_PROGRESS → (re-submit) → APPROVED
+  - Skip approval after rework: REJECTED → APPROVED
+  - Recommendation paths: SUBMITTED → RECOMMENDED → APPROVED
+  - Direct approval: SUBMITTED → APPROVED (single step)
+- **Conditional Transitions**: Validate transitions based on custom conditions per approval step
+- **Event Tracking**: Track all state transitions with complete event history
+- **Serializable**: State machine state can be serialized for persistence and recovery
 
 ## Installation
 
@@ -41,13 +46,13 @@ implementation 'org.state.machine:stateMachine:0.0.1-SNAPSHOT'
 
 ## Visual Workflow
 
-Below is the approval workflow diagram showing states and transition events:
+Below is the approval workflow diagram showing states and transition events. The workflow supports **multi-step approvals** where multiple stakeholders approve in sequence:
 
 ```
-SUBMITTED        IN_PROGRESS        REJECTED        RECOMMENDED        APPROVED
-  |                |                  |                |                |
-  |  SEND          |  REWORK          |  APPROVE       |  APPROVE       |
-  v                v                  v                v                v
+SUBMITTED → IN_PROGRESS → REJECTED → RECOMMENDED → APPROVED
+  |                |                  |                |
+  |  SEND          |  REWORK          |  APPROVE       |  APPROVE
+  v                v                  v                v
 SUBMITTED → IN_PROGRESS → REJECTED → RECOMMENDED → APPROVED
   |                |                  |                |
   |  REJECT        |  REJECT          |  REJECT        |
@@ -59,20 +64,41 @@ REJECTED ←──────────┘                ←─────�
 RECOMMENDED ←────────────────────────┘
 ```
 
+### Multi-Step Approval Paths
+
+The library supports several progression paths across the approval workflow:
+
+**Core Approval Path (2-step):**
+1. **SUBMITTED** → **IN_PROGRESS** (via `SEND` event) - Initial submission
+2. **SUBMITTED** → **RECOMMENDED** (via `RECOMMEND` event) - Analyst recommends action
+3. **SUBMITTED** → **APPROVED** (via `APPROVE` event) - Direct manager approval
+4. **SUBMITTED** → **REJECTED** (via `REJECT` event) - Manager rejects submission
+
+**Rework & Revision Path (after rejection):**
+5. **REJECTED** → **IN_PROGRESS** (via `REWORK` event) - Implement fixes
+6. **REJECTED** → **APPROVED** (via `APPROVE` event) - Skip approval after rework (*second approb step*)
+7. **REJECTED** → **REJECTED** (via `REJECT` event) - Request further revisions
+
+**Recommendation Path (2-step with analyst input):**
+8. **RECOMMENDED** → **REJECTED** (via `REJECT` event) - Reject analyst recommendation
+9. **RECOMMENDED** → **APPROVED** (via `APPROVE` event) - Approve analyst recommendation (*second approb step*)
+10. **RECOMMENDED** → **RECOMMENDED** (via `REJECT` event) - Request revisions on recommendation
+
 ### Event Cheat Sheet
 
 | Event | From → To | Description |
 |-------|-----------|-------------|
-| **SEND** | IN_PROGRESS → SUBMITTED | Submit work for review |
-| **RECOMMEND** | SUBMITTED → RECOMMENDED | Analyst recommends action |
-| **APPROVE** | SUBMITTED → APPROVED | Manager approves submission |
-| **APPROVE** | RECOMMENDED → APPROVED | Approve analyst recommendation |
+| **SEND** | IN_PROGRESS → SUBMITTED | Submit work for review - moves work into approval flow |
+| **RECOMMEND** | SUBMITTED → RECOMMENDED | Analyst recommends action/next steps - first step in recommendation path |
+| **APPROVE** | SUBMITTED → APPROVED | Manager/approver approves submission - *first approb step* |
+| **APPROVE** | RECOMMENDED → APPROVED | Approve analyst recommendation - *second approb step* |
+| **APPROVE** | REJECTED → APPROVED | Skip approval after rework - *second approb step* |
 | **REJECT** | SUBMITTED → REJECTED | Manager rejects submission |
 | **REJECT** | RECOMMENDED → REJECTED | Reject analyst recommendation |
-| **REJECT** | REJECTED → IN_PROGRESS | Rework after rejection |
-| **REJECT** | REJECTED → APPROVED | Skip approval after rework |
-| **REJECT** | APPROVED → REJECTED | Request revisions on approved |
-| **REWORK** | REJECTED → IN_PROGRESS | Implement rework fixes |
+| **REJECT** | REJECTED → IN_PROGRESS | Rework after rejection - return to development |
+| **REJECT** | REJECTED → APPROVED | Skip approval after rework bypass full approval |
+| **REJECT** | APPROVED → REJECTED | Request revisions on approved work |
+| **REWORK** | REJECTED → IN_PROGRESS | Implement fixes and return to in-progress state |
 
 ## Quick Start
 
@@ -115,26 +141,54 @@ try {
 }
 ```
 
-### Approval Workflow Example
+### Approval Workflow Example (Multi-Approb Steps)
 
-The library includes a pre-configured approval workflow supporting:
+The library includes a pre-configured approval workflow supporting multi-step approvals
+with the following progression paths:
 
-- **SUBMITTED** → **IN_PROGRESS** (via SEND event)
-- **SUBMITTED** → **RECOMMENDED** (via RECOMMEND event)
-- **SUBMITTED** → **APPROVED** (via APPROVE event)
-- **SUBMITTED** → **REJECTED** (via REJECT event)
-- **REJECTED** → **IN_PROGRESS** (via REWORK event)
-- **REJECTED** → **APPROVED** (via second APPROVE event)
-- **RECOMMENDED** → **REJECTED** (via REJECT event)
-- **RECOMMENDED** → **APPROVED** (via APPROVE event)
-- **APPROVED** → **REJECTED** (via REJECT event for revisions)
+### Core Approval Path
+1. **SUBMITTED** → **IN_PROGRESS** (via `SEND` event) - Initial submission
+2. **SUBMITTED** → **RECOMMENDED** (via `RECOMMEND` event) - Analyst recommends action
+3. **SUBMITTED** → **APPROVED** (via `APPROVE` event) - Direct manager approval
+4. **SUBMITTED** → **REJECTED** (via `REJECT` event) - Manager rejects submission
 
-Default transition events:
-- `SEND` - Move from IN_PROGRESS to SUBMITTED
-- `RECOMMEND` - Move from SUBMITTED to RECOMMENDED
-- `APPROVE` - Move from SUBMITTED to APPROVED (or RECOMMENDED to APPROVED)
-- `REJECT` - Move from SUBMITTED/RECOMMENDED to REJECTED; from REJECTED to IN_PROGRESS/APPROVED
-- `REWORK` - Move from REJECTED back to IN_PROGRESS
+### Rework & Revision Path (after rejection)
+5. **REJECTED** → **IN_PROGRESS** (via `REWORK` event) - Implement fixes
+6. **REJECTED** → **APPROVED** (via `APPROVE` event) - Skip approval after rework *(second approb step)*
+7. **REJECTED** → **REJECTED** (via `REJECT` event) - Request further revisions
+
+### Recommendation Path
+8. **RECOMMENDED** → **REJECTED** (via `REJECT` event) - Reject analyst recommendation
+9. **RECOMMENDED** → **APPROVED** (via `APPROVE` event) - Approve analyst recommendation *(second approb step)*
+10. **RECOMMENDED** → **RECOMMENDED** (via `REJECT` event) - Request revisions on recommendation
+
+### Full Transition Matrix
+| From \ To | SUBMITTED | IN_PROGRESS | REJECTED | RECOMMENDED | APPROVED |
+|-----------|-----------|-------------|----------|-------------|----------|
+| **SUBMITTED** | - | **SEND** | **REJECT** | **RECOMMEND** | **APPROVE** |
+| **IN_PROGRESS** | **SEND** | - | - | - | - |
+| **REJECTED** | - | **REWORK** | - | **REJECT** | **APPROVE** |
+| **RECOMMENDED** | - | - | **REJECT** | - | **APPROVE** |
+| **APPROVED** | - | - | **REJECT** | - | - |
+
+### Event Descriptions
+- **SEND** (`IN_PROGRESS → SUBMITTED`) - Move work from in-progress to submitted for review
+- **RECOMMEND** (`SUBMITTED → RECOMMENDED`) - Analyst recommends action/next steps
+- **APPROVE** (`SUBMITTED → APPROVED` or `RECOMMENDED → APPROVED`) - Manager/approver approves
+  - First approb step: from SUBMITTED
+  - Second approb step: from REJECTED or RECOMMENDED (after rework/analysis)
+- **REJECT** (`SUBMITTED/RECOMMENDED → REJECTED`, `REJECTED → IN_PROGRESS/APPROVED`) - Reject at any stage
+  - From SUBMITTED: reject submission
+  - From RECOMMENDED: reject recommendation  
+  - From REJECTED: rework (→ IN_PROGRESS) or skip approval (→ APPROVED)
+- **REWORK** (`REJECTED → IN_PROGRESS`) - Implement fixes and return to in-progress state
+
+**Key point**: The `APPROVE` event is the workhorse of the multi-step approval workflow - it can be used multiple times at different stages:
+
+- **First approb step**: from `SUBMITTED` (initial manager/approver approval)
+- **Second approb step**: from `REJECTED` (skip approval after rework) or from `RECOMMENDED` (approve analyst recommendation)
+
+This design embodies the 80/20 principle: a single `APPROVE` event covers the majority of workflow scenarios while remaining flexible enough for sequential approval processes (analyst → manager → approver), rework cycles, and revision paths.
 
 ## API Components
 
