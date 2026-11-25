@@ -39,6 +39,41 @@ Add the dependency to your `pom.xml`:
 implementation 'org.state.machine:stateMachine:0.0.1-SNAPSHOT'
 ```
 
+## Visual Workflow
+
+Below is the approval workflow diagram showing states and transition events:
+
+```
+SUBMITTED        IN_PROGRESS        REJECTED        RECOMMENDED        APPROVED
+  |                |                  |                |                |
+  |  SEND          |  REWORK          |  APPROVE       |  APPROVE       |
+  v                v                  v                v                v
+SUBMITTED → IN_PROGRESS → REJECTED → RECOMMENDED → APPROVED
+  |                |                  |                |
+  |  REJECT        |  REJECT          |  REJECT        |
+  v                v                  v                v
+REJECTED ←──────────┘                ←─────────────┘
+       ^                              ^
+       |  RECOMMEND                   |  REJECT (revision)
+       v                              v
+RECOMMENDED ←────────────────────────┘
+```
+
+### Event Cheat Sheet
+
+| Event | From → To | Description |
+|-------|-----------|-------------|
+| **SEND** | IN_PROGRESS → SUBMITTED | Submit work for review |
+| **RECOMMEND** | SUBMITTED → RECOMMENDED | Analyst recommends action |
+| **APPROVE** | SUBMITTED → APPROVED | Manager approves submission |
+| **APPROVE** | RECOMMENDED → APPROVED | Approve analyst recommendation |
+| **REJECT** | SUBMITTED → REJECTED | Manager rejects submission |
+| **REJECT** | RECOMMENDED → REJECTED | Reject analyst recommendation |
+| **REJECT** | REJECTED → IN_PROGRESS | Rework after rejection |
+| **REJECT** | REJECTED → APPROVED | Skip approval after rework |
+| **REJECT** | APPROVED → REJECTED | Request revisions on approved |
+| **REWORK** | REJECTED → IN_PROGRESS | Implement rework fixes |
+
 ## Quick Start
 
 ### Basic State Machine Setup
