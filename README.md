@@ -163,6 +163,30 @@ Default transition events:
 
 - `StateMachineHelper` - Factory methods for creating common state machine configurations, especially approval workflows
 
+## Design Decisions
+
+### Stateless Architecture
+
+The state machine is **stateless** by design - each `nextState()` call is independent and does not maintain internal mutable state between invocations. This design choice provides several benefits:
+
+- **Thread-safe**: Multiple threads can operate on the same `StateMachine` instance without synchronization concerns
+- **Predictable**: Transition outcomes depend only on the current state and input event, not on hidden history
+- **Composable**: Easy to chain operations, persist state between runs, or recreate from stored state
+- **Testable**: No need to reset or clear state between tests
+
+State is managed externally through `Summary` objects, which capture the entity's status and transition history. Each call to `sm.nextState(event)` returns a new `RealizedTransition` based on the current state, without modifying the `StateMachine` instance itself.
+
+### No Threadpool Design
+
+The library deliberately avoids a built-in threadpool or executor service for the following reasons:
+
+- **Flexibility**: Users can integrate the state machine with their own concurrency model (Spring, Vert.x, custom executors, etc.)
+- **Simplicity**: No hidden threading behavior to reason about or configure
+- **Control**: Callers decide when and how state machine operations execute, including batching, rate-limiting, or transaction boundaries
+- **Determinism**: Easier to test and debug since there are no race conditions or internal scheduling non-determinism
+
+The `StateMachine` class implements `Serializable` and is designed to be instantiated once and used repeatedly, with state managed through `Summary` objects that can be saved and restored between runs.
+
 ## Testing
 
 The project includes comprehensive tests in `src/test/java/` covering:
